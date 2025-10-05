@@ -1,68 +1,100 @@
-import { useState } from 'react';
-import type { FormEvent } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import type { FormEvent } from 'react'
 import type { Message } from '../types';
+import axios from 'axios';
 import './ChatPage.css';
 
-const initialMessages: Message[] = [
-  {
-    id: 1,
-    text: 'Olá! Eu sou seu Mentor de Código Pessoal. Me faça uma pergunta sobre o seu projeto.',
-    sender: 'ai',
-  },
-];
+const API_URL = 'http://localhost:8000';
 
 function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
-  const [inputValue, setInputValue] = useState<string>('');
+    const [messages, setMessages] = useState<Message[]>([
+        {
+            id: 1,
+            text: 'Olá! Seu código foi processado. Faça uma pergunta sobre ele.',
+            sender: 'ai',
+        },
+    ]);
+    const [inputValue, setInputValue] = useState<string>('');
+    const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+    const messageListRef = useRef<HTMLDivElement>(null);
 
-    const userText = inputValue.trim();
-    if (!userText) return;
+    useEffect(() => {
+        if (messageListRef.current) {
+            messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+        }
+    }, [messages]);
 
-    const userMessage: Message = {
-      id: Date.now(),
-      text: userText,
-      sender: 'user',
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const userText = inputValue.trim();
+        if (!userText || isLoading) return;
+
+        const userMessage: Message = {
+            id: Date.now(),
+            text: userText,
+            sender: 'user',
+        };
+        setMessages(currentMessages => [...currentMessages, userMessage]);
+        setInputValue('');
+        setIsLoading(true);
+
+        try {
+            const response = await axios.post(`${API_URL}/chat`, {
+                question: userText,
+            });
+
+            const aiResponse: Message = {
+                id: Date.now() + 1,
+                text: response.data.answer,
+                sender: 'ai',
+            };
+            setMessages(currentMessages => [...currentMessages, aiResponse]);
+
+        } catch (error: any) {
+            console.error("Erro ao buscar resposta:", error);
+            const errorMessage: Message = {
+                id: Date.now() + 1,
+                text: `Ocorreu um erro ao buscar a resposta. Detalhes: ${error.response?.data?.detail || error.message}`,
+                sender: 'ai',
+            };
+            setMessages(currentMessages => [...currentMessages, errorMessage]);
+        } finally {
+            setIsLoading(false);
+        }
     };
-    setMessages(currentMessages => [...currentMessages, userMessage]);
 
-    setInputValue('');
-
-    setTimeout(() => {
-      const aiResponse: Message = {
-        id: Date.now() + 1,
-        text: 'Obrigado pela sua pergunta! No momento, sou apenas uma simulação, mas no futuro, eu analisaria seu código para dar uma resposta completa.',
-        sender: 'ai',
-      };
-      setMessages(currentMessages => [...currentMessages, aiResponse]);
-    }, 1000);
-  };
-
-  return (
-    <div className="chat-container">
-      <div className="message-list">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`message ${message.sender === 'user' ? 'user-message' : 'ai-message'}`}
-          >
-            {message.text}
-          </div>
-        ))}
-      </div>
-      <form className="chat-input-form" onSubmit={handleSubmit}>
-        <input
-          type="text"
-          placeholder="Digite sua pergunta..."
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-        />
-        <button type="submit">Enviar</button>
-      </form>
-    </div>
-  );
+    return (
+        <div className="chat-container">
+            <div className="message-list" ref={messageListRef}>
+                {messages.map((message) => (
+                    <div
+                        key={message.id}
+                        className={`message ${message.sender === 'user' ? 'user-message' : 'ai-message'}`}
+                    >
+                        {message.text}
+                    </div>
+                ))}
+                {isLoading && (
+                    <div className="message ai-message">
+                        <span className="typing-indicator"></span>
+                        <span className="typing-indicator"></span>
+                        <span className="typing-indicator"></span>
+                    </div>
+                )}
+            </div>
+            <form className="chat-input-form" onSubmit={handleSubmit}>
+                <input
+                    type="text"
+                    placeholder={isLoading ? "Aguarde a resposta..." : "Digite sua pergunta..."}
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    disabled={isLoading}
+                />
+                <button type="submit" disabled={isLoading}>Enviar</button>
+            </form>
+        </div>
+    );
 }
 
 export default ChatPage;
